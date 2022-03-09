@@ -1,3 +1,16 @@
+<meta name="color-scheme" content="dark">
 <script>
-document.write("Hello world")
+var input = confirm("Do you wanna test my ding dong program?");
+function rerun () {
+	var input = confirm("Ding Dong");
+	document.write(" Ding Dong!");
+}
+if (input == true) {
+	for(var index = 0; index < 10; index++) {
+		rerun();
+	}
+}
+else {
+	document.write("NAY");
+}
 </script>
