@@ -69,9 +69,12 @@
       async function getWeatherFromYR(lat, lon, elementId, city) {
         const container = document.getElementById(elementId);
         try {
-          const res = await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`, {
-            headers: { 'User-Agent': 'TobiasAndersson - tumskruven@gmail.com' }
-          });
+          const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
+          // Detect mobile user agents to omit custom headers (avoids CORS issues)
+          const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+          const options = isMobile ? {} : { headers: { 'User-Agent': 'TobiasAndersson - tumskruven@gmail.com' } };
+
+          const res = await fetch(url, options);
           if (!res.ok) throw new Error("Failed to fetch YR weather data");
           const data = await res.json();
           const forecast = data.properties.timeseries[0];
