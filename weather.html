@@ -56,24 +56,18 @@
       function getWeatherEmoji(symbolCode, time) {
         const hourVal = time ? new Date(time).getHours() : new Date().getHours();
         const isNight = hourVal < 6 || hourVal >= 18;
-        if (symbolCode.includes('clearsky')) {
-          return isNight ? '🌙' : '☀️';
-        }
-        const map = {
-          cloudy: '☁️', fair: '🌤️', fog: '🌫️',
-          heavyrain: '🌧️', heavysnow: '❄️', lightrain: '🌦️',
-          lightsnow: '🌨️', partlycloudy: '⛅', rain: '🌧️',
-          sleet: '🌨️', snow: '❄️', thunderstorm: '🌩️'
-        };
-        for (const key in map) {
-          if (symbolCode.includes(key)) return map[key];
-        }
+        // Special clear sky and partly cloudy handling
+        if (symbolCode.includes('clearsky')) return isNight ? '🌙' : '☀️';
+        if (symbolCode.includes('partlycloudy') || symbolCode.includes('fair')) return isNight ? '🌙☁️' : '⛅';
+        const map = {cloudy:'☁️',fair:'🌤️',fog:'🌫️',heavyrain:'🌧️',heavysnow:'❄️',lightrain:'🌦️',lightsnow:'🌨️',rain:'🌧️',sleet:'🌨️',snow:'❄️',thunderstorm:'🌩️'};
+        for (const key in map) if (symbolCode.includes(key)) return map[key];
         return '🌈';
       }
 
       function getWeatherEmojiSMHI(code, time) {
-        const numMap = {1:'clearsky',2:'fair',3:'fair',4:'cloudy',5:'fog',6:'heavyrain',7:'lightrain',8:'cloudy',9:'clearsky',10:'lightsnow',11:'lightsnow',12:'snow',13:'thunderstorm',14:'thunderstorm',15:'heavyrain',16:'heavyrain',17:'lightrain',18:'lightrain',19:'sleet'};
+        const numMap = {1:'clearsky',2:'fair',3:'fair',4:'cloudy',5:'fog',6:'heavyrain',7:'lightrain',8:'cloudy',9:'clearsky',10:'lightsnow',11:'lightsnow',12:'snow',13:'thunderstorm',14:'thunderstorm',15:'heavyrain',16:'heavyrain',17:'lightrain',18:'lightrain',19:'sleet',20:'partlycloudy'};
         const symbolCode = numMap[code] || '';
+        // Use shared logic to determine day/night emoji including partly cloudy
         return getWeatherEmoji(symbolCode, time);
       }
 
