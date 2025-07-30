@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-900 text-gray-100 h-full flex flex-col">
+    <header class="bg-gray-800 shadow p-6 text-center">
+      <h1 class="text-3xl font-bold">Weather Page</h1>
+      <p class="text-lg text-gray-400">Compare weather from SMHI and YR.no</p>
+    </header>
+
+    <main class="flex-grow p-6 max-w-4xl mx-auto">
+      <div class="mb-6">
+        <div class="flex justify-center space-x-4 mb-6">
+          <button onclick="showTab('smhi')" class="tab-button bg-gray-700 px-4 py-2 rounded hover:bg-gray-600">SMHI</button>
+          <button onclick="showTab('yr')" class="tab-button bg-gray-700 px-4 py-2 rounded hover:bg-gray-600">YR.no</button>
+        </div>
+
+        <div id="tab-smhi" class="tab-content">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="weather-smhi-kungsbacka" class="bg-gray-800 p-6 rounded-xl shadow text-center">
+              <p class="text-gray-400">Fetching Kungsbacka weather from SMHI...</p>
+            </div>
+            <div id="weather-smhi-gothenburg" class="bg-gray-800 p-6 rounded-xl shadow text-center">
+              <p class="text-gray-400">Fetching Gothenburg weather from SMHI...</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-yr" class="tab-content hidden">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="weather-yr-kungsbacka" class="bg-gray-800 p-6 rounded-xl shadow text-center">
+              <p class="text-gray-400">Fetching Kungsbacka weather from YR.no...</p>
+            </div>
+            <div id="weather-yr-gothenburg" class="bg-gray-800 p-6 rounded-xl shadow text-center">
+              <p class="text-gray-400">Fetching Gothenburg weather from YR.no...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="bg-gray-800 shadow-inner p-6 text-center">
+      <p class="text-sm text-gray-500">&copy; 2025 Tobias Andersson</p>
+    </footer>
+
+    <script>
+      function showTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+        document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      }
+
+      function getWeatherEmoji(symbolCode) {
+        const map = {
+          clearsky: '☀️', cloudy: '☁️', fair: '🌤️', fog: '🌫️',
+          heavyrain: '🌧️', heavysnow: '❄️', lightrain: '🌦️',
+          lightsnow: '🌨️', partlycloudy: '⛅', rain: '🌧️',
+          sleet: '🌨️', snow: '❄️', thunderstorm: '🌩️'
+        };
+        for (const key in map) {
+          if (symbolCode.includes(key)) return map[key];
+        }
+        return '🌈';
+      }
+
+      async function getWeatherFromYR(lat, lon, elementId, city) {
+        const container = document.getElementById(elementId);
+        try {
+          const res = await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`, {
+            headers: { 'User-Agent': 'TobiasAndersson - tumskruven@gmail.com' }
+          });
+          if (!res.ok) throw new Error("Failed to fetch YR weather data");
+          const data = await res.json();
+          const forecast = data.properties.timeseries[0];
+          const details = forecast.data.instant.details;
+          const nextHourSymbol = forecast.data.next_1_hours?.summary?.symbol_code || "";
+
+          let hourlyForecast = '<div class="mt-6"><h3 class="text-lg font-semibold mb-2">Next 24h Forecast</h3><div class="grid grid-cols-3 gap-4 text-sm">';
+          data.properties.timeseries.slice(0, 24).forEach(f => {
+            const hour = new Date(f.time).getHours().toString().padStart(2, '0');
+            const temp = f.data.instant.details.air_temperature;
+            const symbolCode = f.data.next_1_hours?.summary?.symbol_code || "";
+            const emoji = getWeatherEmoji(symbolCode);
+            hourlyForecast += `<div class='bg-gray-700 p-2 rounded text-center'><div class='text-xl'>${emoji}</div><div>${hour}:00</div><div class='text-xs text-gray-300'>${temp} °C</div></div>`;
+          });
+
+          container.innerHTML = `
+            <h2 class="text-2xl font-semibold mb-2">YR.no Weather (${city})</h2>
+            <div class="text-4xl mb-2">${getWeatherEmoji(nextHourSymbol)}</div>
+            <p class="text-gray-300">Forecast: ${nextHourSymbol.replaceAll("_", " ")}</p>
+            <p class="text-gray-300">Temperature: ${details.air_temperature} °C</p>
+            <p class="text-gray-300">Humidity: ${details.relative_humidity} %</p>
+            <p class="text-gray-300">Wind Speed: ${details.wind_speed} m/s</p>
+            ${hourlyForecast}
+          `;
+        } catch (err) {
+          container.innerHTML = `<p class="text-red-400">YR Error: ${err.message}</p>`;
+        }
+      }
+
+      async function getWeatherFromSMHI(lat, lon, elementId, city) {
+        const container = document.getElementById(elementId);
+        try {
+          const baseUrl = "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2";
+          const pointDataUrl = `${baseUrl}/geotype/point/lon/${lon}/lat/${lat}/data.json`;
+
+          const pointDataResponse = await fetch(pointDataUrl);
+          if (!pointDataResponse.ok) throw new Error("Failed to fetch SMHI point data");
+          const pointData = await pointDataResponse.json();
+
+          const timeSeries = pointData.timeSeries;
+          const firstTimeStep = timeSeries[0].validTime;
+          const firstParameters = timeSeries[0].parameters;
+          const firstSymbol = firstParameters.find(p => p.name === "Wsymb2")?.values[0] ?? null;
+          const emojiMap = {
+            1: '☀️', 2: '🌤️', 3: '⛅', 4: '☁️',
+            5: '🌫️', 6: '🌧️', 7: '🌦️', 8: '🌧️',
+            9: '⛈️', 10: '🌨️', 11: '🌨️', 12: '❄️',
+            13: '🌩️', 14: '🌩️', 15: '🌧️', 16: '🌧️',
+            17: '🌧️', 18: '🌨️', 19: '🌨️'
+          };
+          const firstEmoji = firstSymbol ? emojiMap[firstSymbol] || '🌡️' : '🌡️';
+          const temperature = firstParameters.find(p => p.name === "t")?.values[0] ?? 'N/A';
+          const windSpeed = firstParameters.find(p => p.name === "ws")?.values[0] ?? 'N/A';
+          const humidity = firstParameters.find(p => p.name === "r")?.values[0] ?? 'N/A';
+
+          let hourlyForecast = '<div class="mt-6"><h3 class="text-lg font-semibold mb-2">Next 24h Forecast</h3><div class="grid grid-cols-3 gap-4 text-sm">';
+          timeSeries.slice(0, 24).forEach(f => {
+            const hour = new Date(f.validTime).getHours().toString().padStart(2, '0');
+            const temp = f.parameters.find(p => p.name === "t")?.values[0] ?? 'N/A';
+            const symbol = f.parameters.find(p => p.name === "Wsymb2")?.values[0] ?? null;
+            const emojiMap = {
+              1: '☀️', 2: '🌤️', 3: '⛅', 4: '☁️',
+              5: '🌫️', 6: '🌧️', 7: '🌦️', 8: '🌧️',
+              9: '⛈️', 10: '🌨️', 11: '🌨️', 12: '❄️',
+              13: '🌩️', 14: '🌩️', 15: '🌧️', 16: '🌧️',
+              17: '🌧️', 18: '🌨️', 19: '🌨️'
+            };
+            const emoji = symbol ? emojiMap[symbol] || '🌈' : '🌡️';
+          const firstSymbol = firstParameters.find(p => p.name === "Wsymb2")?.values[0] ?? null;
+          const firstEmoji = firstSymbol ? emojiMap[firstSymbol] || '🌡️' : '🌡️';
+            hourlyForecast += `<div class='bg-gray-700 p-2 rounded text-center'><div class='text-xl'>${emoji}</div><div>${hour}:00</div><div class='text-xs text-gray-300'>${temp} °C</div></div>`;
+          });
+          hourlyForecast += '</div></div>';
+
+          container.innerHTML = `
+            <h2 class="text-2xl font-semibold mb-2">SMHI Weather (${city})</h2>
+            <div class="text-4xl mb-2">${firstEmoji}</div>
+            <p class="text-gray-300">Time: ${new Date(firstTimeStep).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p> 
+            <p class="text-gray-300">Temperature: ${temperature} °C</p>
+            <p class="text-gray-300">Wind speed: ${windSpeed} m/s</p>
+            <p class="text-gray-300">Humidity: ${humidity} %</p>
+            ${hourlyForecast}
+          `;
+        } catch (err) {
+          container.innerHTML = `<p class="text-red-400">SMHI Error: ${err.message}</p>`;
+        }
+      }
+
+      getWeatherFromYR(57.4928, 12.0760, "weather-yr-kungsbacka", "Kungsbacka");
+      getWeatherFromYR(57.7089, 11.9746, "weather-yr-gothenburg", "Gothenburg");
+      getWeatherFromSMHI(57.48, 12.05, "weather-smhi-kungsbacka", "Kungsbacka");
+      getWeatherFromSMHI(57.72, 11.95, "weather-smhi-gothenburg", "Gothenburg");
+    </script>
+  </body>
+</html>
