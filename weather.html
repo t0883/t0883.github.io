@@ -95,8 +95,8 @@
             <div class="text-4xl mb-2">${getWeatherEmoji(nextHourSymbol)}</div>
             <p class="text-gray-300">Forecast: ${nextHourSymbol.replaceAll("_", " ")}</p>
             <p class="text-gray-300">Temperature: ${details.air_temperature} °C</p>
-            <p class="text-gray-300">Humidity: ${details.relative_humidity} %</p>
             <p class="text-gray-300">Wind Speed: ${details.wind_speed} m/s</p>
+            <p class="text-gray-300">Humidity: ${details.relative_humidity} %</p> 
             ${hourlyForecast}
           `;
         } catch (err) {
@@ -154,7 +154,7 @@
             <div class="text-4xl mb-2">${firstEmoji}</div>
             <p class="text-gray-300">Time: ${new Date(firstTimeStep).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p> 
             <p class="text-gray-300">Temperature: ${temperature} °C</p>
-            <p class="text-gray-300">Wind speed: ${windSpeed} m/s</p>
+            <p class="text-gray-300">Wind Speed: ${windSpeed} m/s</p>
             <p class="text-gray-300">Humidity: ${humidity} %</p>
             ${hourlyForecast}
           `;
