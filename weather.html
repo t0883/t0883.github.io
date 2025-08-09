@@ -253,79 +253,85 @@
         });
       }
 
-      async function searchLocations(q){
-        if(!q || q.trim().length < 2){ resultsEl.innerHTML = ''; return; }
-        resultsEl.innerHTML = '<div class="text-gray-400">Searching…</div>';
-        try{
-          const results = await (async ()=>{
-            // Try Photon first (Komoot)
-            try{
-              const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lang=en`;
-              const res = await fetch(url);
-              if(res.ok){
-                const data = await res.json();
-                const feats = data?.features || [];
-                if (feats.length) return feats.slice(0,8).map(f=>({
-                  id: `${f.geometry.coordinates[1]},${f.geometry.coordinates[0]}`,
-                  name: f.properties.name,
-                  admin1: f.properties.state,
-                  country: f.properties.country,
-                  country_code: (f.properties.countrycode||'').toUpperCase(),
-                  latitude: f.geometry.coordinates[1],
-                  longitude: f.geometry.coordinates[0]
-                }));
-              }
-            }catch(e){ /* swallow and fallback */ }
-            // Fallback: Open-Meteo
-            try{
-              const url2 = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`;
-              const res2 = await fetch(url2);
-              if(res2.ok){
-                const data2 = await res2.json();
-                if (data2.results && data2.results.length) return data2.results.map(r=>({
-                  id: `${r.latitude},${r.longitude}`,
-                  name: r.name, admin1: r.admin1, country: r.country, country_code: r.country_code,
-                  latitude: r.latitude, longitude: r.longitude
-                }));
-              }
-            }catch(e){ /* swallow and fallback */ }
-            // Last fallback: Nominatim
-            try{
-              const res3 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=8&addressdetails=1&q=${encodeURIComponent(q)}`);
-              if(!res3.ok) throw new Error('Fallback geocoding failed');
-              const data3 = await res3.json();
-              return (data3||[]).map(r=>({
+async function searchLocations(q){
+      if(!q || q.trim().length < 2){ resultsEl.innerHTML = ''; return; }
+      resultsEl.innerHTML = '<div class="text-gray-400">Searching…</div>';
+      try{
+        const results = await (async ()=>{
+          // Photon first
+          try{
+            const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lang=en`;
+            const res = await fetch(url);
+            if(res.ok){
+              const d = await res.json();
+              const feats = d?.features || [];
+              if (feats.length) return feats.slice(0,8).map(f=>({
+                id: `${f.geometry.coordinates[1]},${f.geometry.coordinates[0]}`,
+                name: f.properties.name,
+                admin1: f.properties.state,
+                country: f.properties.country,
+                country_code: (f.properties.countrycode||'').toUpperCase(),
+                latitude: f.geometry.coordinates[1],
+                longitude: f.geometry.coordinates[0]
+              }));
+            }
+          }catch(e){}
+
+          // Nominatim fallback
+          try{
+            const url2 = `https://nominatim.openstreetmap.org/search?format=json&limit=8&addressdetails=1&accept-language=en&email=tumskruven@gmail.com&q=${encodeURIComponent(q)}`;
+            const res2 = await fetch(url2);
+            if(res2.ok){
+              const data2 = await res2.json();
+              if (Array.isArray(data2) && data2.length) return data2.map(r=>({
                 id: `${r.lat},${r.lon}`,
                 name: (r.display_name||'').split(',')[0],
                 admin1: r.address?.state || r.address?.county,
                 country: r.address?.country,
-                country_code: (r.address?.country_code||'').toUpperCase(),
+                country_code: r.address?.country_code?.toUpperCase(),
                 latitude: parseFloat(r.lat), longitude: parseFloat(r.lon)
               }));
-            }catch(e){ throw e; }
-          })();
+            }
+          }catch(e){}
 
-          if(!results || results.length === 0){ resultsEl.innerHTML = '<div class="text-gray-400">No results.</div>'; return; }
-          resultsEl.innerHTML = '';
-          results.forEach(r => {
-            const btn = document.createElement('button');
-            btn.className = 'w-full text-left bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl px-4 py-3';
-            btn.innerHTML = `<div class='font-medium'>${r.name} ${r.country_code?countryFlagEmoji(r.country_code):''}</div><div class='text-sm text-gray-400'>${[r.admin1, r.country].filter(Boolean).join(', ')} · ${r.latitude.toFixed(2)}, ${r.longitude.toFixed(2)}</div>`;
-            btn.addEventListener('click', ()=> handleSelectLocation(r));
-            resultsEl.appendChild(btn);
-          });
-        }catch(e){
-          resultsEl.innerHTML = `<div class='text-red-400'>${e.message}</div>`;
-        }
-      }
+          // Open-Meteo fallback
+          try{
+            const url3 = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`;
+            const res3 = await fetch(url3);
+            if(res3.ok){
+              const d3 = await res3.json();
+              if (d3.results && d3.results.length) return d3.results.map(r=>({
+                id: `${r.latitude},${r.longitude}`,
+                name: r.name, admin1: r.admin1, country: r.country, country_code: r.country_code,
+                latitude: r.latitude, longitude: r.longitude
+              }));
+            }
+          }catch(e){}
 
-      async function handleSelectLocation(loc){
-        selectionWrap.classList.remove('hidden');
-        selectionMeta.textContent = `${loc.name}${loc.admin1?`, ${loc.admin1}`:''}${loc.country?`, ${loc.country}`:''} · ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`;
-        saveRecent(loc);
-        getWeatherFromSMHI(loc.latitude, loc.longitude, 'weather-search-smhi', loc.name);
-        showTab('search');
+          throw new Error('All geocoding providers failed.');
+        })();
+
+        resultsEl.innerHTML = '';
+        if(!results || results.length === 0){ resultsEl.innerHTML = '<div class="text-gray-400">No results.</div>'; return; }
+        results.forEach(r => {
+          const btn = document.createElement('button');
+          btn.className = 'w-full text-left bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl px-4 py-3';
+          btn.innerHTML = `<div class='font-medium'>${r.name} ${r.country_code?countryFlagEmoji(r.country_code):''}</div><div class='text-sm text-gray-400'>${[r.admin1, r.country].filter(Boolean).join(', ')} · ${r.latitude.toFixed(2)}, ${r.longitude.toFixed(2)}</div>`;
+          btn.addEventListener('click', ()=> handleSelectLocation(r));
+          resultsEl.appendChild(btn);
+        });
+      }catch(e){
+        resultsEl.innerHTML = `<div class='text-red-400'>${e.message}</div>`;
       }
+    }
+
+    async function handleSelectLocation(loc){
+      selectionWrap.classList.remove('hidden');
+      selectionMeta.textContent = `${loc.name}${loc.admin1?`, ${loc.admin1}`:''}${loc.country?`, ${loc.country}`:''} · ${loc.latitude.toFixed(2)}, ${loc.longitude.toFixed(2)}`;
+      saveRecent(loc);
+      getWeatherFromSMHI(loc.latitude.toFixed(2), loc.longitude.toFixed(2), 'weather-search-smhi', loc.name);
+      showTab('search');
+    }
 
       const debouncedSearch = debounce(searchLocations, 400);
       searchInput?.addEventListener('input', (e)=> debouncedSearch(e.target.value));
