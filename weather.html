@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Weather</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="color-scheme" content="dark light" />
+    <style>
+      :focus-visible { outline: 2px solid rgba(59,130,246,.9); outline-offset: 2px; border-radius: .75rem; }
+    </style>
   </head>
   <body class="bg-gray-900 text-gray-100 h-full flex flex-col">
     <header class="bg-gray-800 shadow p-6 text-center">
@@ -12,34 +16,62 @@
       <p class="text-lg text-gray-400">Compare weather from SMHI and YR.no</p>
     </header>
 
-    <main class="flex-grow p-6 max-w-4xl mx-auto">
+    <main class="flex-grow p-6 max-w-5xl mx-auto">
       <div class="mb-6">
-        <div class="flex justify-center space-x-4 mb-6">
-          <button onclick="showTab('smhi')" class="tab-button bg-gray-700 px-4 py-2 rounded hover:bg-gray-600">SMHI</button>
-          <button onclick="showTab('yr')" class="tab-button bg-gray-700 px-4 py-2 rounded hover:bg-gray-600">YR.no</button>
+        <div role="tablist" aria-label="Weather providers" class="flex justify-center gap-2 md:gap-4 mb-6">
+          <button role="tab" id="tabbtn-smhi" data-tab="smhi" class="tab-button bg-gray-700/80 px-4 py-2 rounded-xl hover:bg-gray-600 aria-selected:bg-blue-600 aria-selected:text-white transition" aria-selected="true">SMHI</button>
+          <button role="tab" id="tabbtn-yr" data-tab="yr" class="tab-button bg-gray-700/80 px-4 py-2 rounded-xl hover:bg-gray-600 transition" aria-selected="false">YR.no</button>
+          <button role="tab" id="tabbtn-search" data-tab="search" class="tab-button bg-gray-700/80 px-4 py-2 rounded-xl hover:bg-gray-600 transition" aria-selected="false">Search</button>
         </div>
 
-        <div id="tab-smhi" class="tab-content">
+        <!-- SMHI tab -->
+        <section id="tab-smhi" class="tab-content">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div id="weather-smhi-kungsbacka" class="bg-gray-800 p-6 rounded-xl shadow text-center">
-              <p class="text-gray-400">Fetching Kungsbacka weather from SMHI...</p>
+            <div id="weather-smhi-kungsbacka" class="panel">
+              <p class="muted">Fetching Kungsbacka weather from SMHI...</p>
             </div>
-            <div id="weather-smhi-gothenburg" class="bg-gray-800 p-6 rounded-xl shadow text-center">
-              <p class="text-gray-400">Fetching Gothenburg weather from SMHI...</p>
+            <div id="weather-smhi-gothenburg" class="panel">
+              <p class="muted">Fetching Gothenburg weather from SMHI...</p>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div id="tab-yr" class="tab-content hidden">
+        <!-- YR tab -->
+        <section id="tab-yr" class="tab-content hidden">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div id="weather-yr-kungsbacka" class="bg-gray-800 p-6 rounded-xl shadow text-center">
-              <p class="text-gray-400">Fetching Kungsbacka weather from YR.no...</p>
+            <div id="weather-yr-kungsbacka" class="panel">
+              <p class="muted">Fetching Kungsbacka weather from YR.no...</p>
             </div>
-            <div id="weather-yr-gothenburg" class="bg-gray-800 p-6 rounded-xl shadow text-center">
-              <p class="text-gray-400">Fetching Gothenburg weather from YR.no...</p>
+            <div id="weather-yr-gothenburg" class="panel">
+              <p class="muted">Fetching Gothenburg weather from YR.no...</p>
             </div>
           </div>
-        </div>
+        </section>
+
+        <!-- SEARCH tab (SMHI-only) -->
+        <section id="tab-search" class="tab-content hidden">
+          <div class="mx-auto max-w-2xl">
+            <label for="search" class="block text-sm text-gray-300 mb-2">Search city or place <span class="text-gray-400">(SMHI forecast)</span></label>
+            <div class="relative">
+              <input id="search" type="text" inputmode="search" placeholder="e.g. Stockholm, Oslo, Kungsbacka" class="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-3 pr-12 focus:border-blue-500" autocomplete="off" />
+              <button id="clearSearch" class="absolute right-2 top-2 px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm" title="Clear">Clear</button>
+            </div>
+            <div id="recent-wrap" class="mt-3 hidden">
+              <p class="text-xs text-gray-400 mb-2">Recent</p>
+              <div id="recent" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div id="results" class="mt-4 grid gap-2"></div>
+
+            <div id="selection" class="mt-6 hidden">
+              <h3 class="text-lg font-semibold mb-1">Selected location <span class="text-sm text-gray-400 font-normal">(SMHI)</span></h3>
+              <p id="selectionMeta" class="text-sm text-gray-300 mb-4"></p>
+              <div class="grid grid-cols-1 gap-6">
+                <div id="weather-search-smhi" class="panel min-h-[160px]"></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -48,34 +80,64 @@
     </footer>
 
     <script>
+      // ---------- UI helpers ----------
+      const $ = (sel, root=document) => root.querySelector(sel);
+      const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+      // Shared panel styles
+      const panelBase = 'bg-gray-800 p-6 rounded-xl shadow text-center';
+      const panelSkeleton = `\n        <div class=\"animate-pulse\">\n          <div class=\"h-6 bg-gray-700/80 rounded w-1/2 mx-auto mb-4\"></div>\n          <div class=\"h-8 bg-gray-700/80 rounded w-24 mx-auto mb-2\"></div>\n          <div class=\"space-y-2\">\n            <div class=\"h-4 bg-gray-700/80 rounded\"></div>\n            <div class=\"h-4 bg-gray-700/80 rounded w-5/6 mx-auto\"></div>\n          </div>\n        </div>`;
+
+      $$('#tab-smhi .panel, #tab-yr .panel, #tab-search .panel').forEach(el => el.className = 'panel ' + panelBase);
+      $$('.muted').forEach(el => el.className = 'text-gray-400');
+
       function showTab(tabName) {
-        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
-        document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+        $$('.tab-content').forEach(tab => tab.classList.add('hidden'));
+        $(`#tab-${tabName}`).classList.remove('hidden');
+        $$('.tab-button').forEach(btn => btn.setAttribute('aria-selected', String(btn.dataset.tab === tabName)));
+        localStorage.setItem('weather.activeTab', tabName);
       }
 
+      $$('.tab-button').forEach((btn, i, arr) => {
+        btn.addEventListener('keydown', (e) => {
+          const idx = arr.indexOf(document.activeElement);
+          if (['ArrowRight','ArrowLeft','Home','End'].includes(e.key)) e.preventDefault();
+          if (e.key === 'ArrowRight') arr[Math.min(idx+1, arr.length-1)].focus();
+          if (e.key === 'ArrowLeft') arr[Math.max(idx-1, 0)].focus();
+          if (e.key === 'Home') arr[0].focus();
+          if (e.key === 'End') arr[arr.length-1].focus();
+          if (e.key === 'Enter' || e.key === ' ') showTab(btn.dataset.tab);
+        });
+        btn.addEventListener('click', () => showTab(btn.dataset.tab));
+      });
+
+      const savedTab = localStorage.getItem('weather.activeTab');
+      if (savedTab) showTab(savedTab);
+
+      // ---------- Emoji helpers ----------
       function getWeatherEmoji(symbolCode, time) {
         const hourVal = time ? new Date(time).getHours() : new Date().getHours();
         const isNight = hourVal < 6 || hourVal >= 18;
-        // Special clear sky and partly cloudy handling
-        if (symbolCode.includes('clearsky')) return isNight ? '🌙' : '☀️';
-        if (symbolCode.includes('partlycloudy') || symbolCode.includes('fair')) return isNight ? '🌙☁️' : '⛅';
+        if ((symbolCode || '').includes('clearsky')) return isNight ? '🌙' : '☀️';
+        if ((symbolCode || '').includes('partlycloudy') || (symbolCode || '').includes('fair')) return isNight ? '🌙☁️' : '⛅';
         const map = {cloudy:'☁️',fair:'🌤️',fog:'🌫️',heavyrain:'🌧️',heavysnow:'❄️',lightrain:'🌦️',lightsnow:'🌨️',rain:'🌧️',sleet:'🌨️',snow:'❄️',thunderstorm:'🌩️'};
-        for (const key in map) if (symbolCode.includes(key)) return map[key];
+        for (const key in map) if ((symbolCode || '').includes(key)) return map[key];
         return '🌈';
       }
 
       function getWeatherEmojiSMHI(code, time) {
         const numMap = {1:'clearsky',2:'fair',3:'fair',4:'cloudy',5:'fog',6:'heavyrain',7:'lightrain',8:'cloudy',9:'clearsky',10:'lightsnow',11:'lightsnow',12:'snow',13:'thunderstorm',14:'thunderstorm',15:'heavyrain',16:'heavyrain',17:'lightrain',18:'lightrain',19:'sleet',20:'partlycloudy'};
         const symbolCode = numMap[code] || '';
-        // Use shared logic to determine day/night emoji including partly cloudy
         return getWeatherEmoji(symbolCode, time);
       }
 
+      // ---------- Providers ----------
       async function getWeatherFromYR(lat, lon, elementId, city) {
         const container = document.getElementById(elementId);
+        container.className = 'panel ' + panelBase;
+        container.innerHTML = panelSkeleton;
         try {
           const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
-          // Detect mobile user agents to omit custom headers (avoids CORS issues)
           const isMobile = /Mobi|Android/i.test(navigator.userAgent);
           const options = isMobile ? {} : { headers: { 'User-Agent': 'TobiasAndersson - tumskruven@gmail.com' } };
 
@@ -94,6 +156,7 @@
             const emoji = getWeatherEmoji(symbolCode, f.time);
             hourlyForecast += `<div class='bg-gray-700 p-2 rounded text-center'><div class='text-xl'>${emoji}</div><div>${hour}:00</div><div class='text-xs text-gray-300'>${temp} °C</div></div>`;
           });
+          hourlyForecast += '</div></div>';
 
           container.innerHTML = `
             <h2 class="text-2xl font-semibold mb-2">YR.no Weather (${city})</h2>
@@ -111,6 +174,8 @@
 
       async function getWeatherFromSMHI(lat, lon, elementId, city) {
         const container = document.getElementById(elementId);
+        container.className = 'panel ' + panelBase;
+        container.innerHTML = panelSkeleton;
         try {
           const baseUrl = "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2";
           const pointDataUrl = `${baseUrl}/geotype/point/lon/${lon}/lat/${lat}/data.json`;
@@ -149,7 +214,125 @@
         }
       }
 
+      // ---------- Search tab (SMHI-only) ----------
+      const searchInput = $('#search');
+      const resultsEl = $('#results');
+      const recentWrap = $('#recent-wrap');
+      const recentEl = $('#recent');
+      const clearBtn = $('#clearSearch');
+      const selectionWrap = $('#selection');
+      const selectionMeta = $('#selectionMeta');
 
+      function debounce(fn, delay=350){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), delay); }; }
+
+      function countryFlagEmoji(countryCode){
+        if(!countryCode) return '';
+        return countryCode.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt(0)));
+      }
+
+      function saveRecent(item){
+        const key = 'weather.recent';
+        const list = JSON.parse(localStorage.getItem(key) || '[]');
+        const updated = [item, ...list.filter(x => x.id !== item.id)].slice(0,6);
+        localStorage.setItem(key, JSON.stringify(updated));
+        renderRecent();
+      }
+
+      function renderRecent(){
+        const list = JSON.parse(localStorage.getItem('weather.recent') || '[]');
+        if (list.length === 0){ recentWrap.classList.add('hidden'); return; }
+        recentWrap.classList.remove('hidden');
+        recentEl.innerHTML = '';
+        list.forEach(x => {
+          const b = document.createElement('button');
+          b.className = 'px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-full text-sm';
+          b.textContent = `${x.name}${x.admin1?`, ${x.admin1}`:''} ${x.country_code?countryFlagEmoji(x.country_code):''}`;
+          b.title = 'Use this location';
+          b.addEventListener('click', () => handleSelectLocation(x));
+          recentEl.appendChild(b);
+        });
+      }
+
+      async function searchLocations(q){
+        if(!q || q.trim().length < 2){ resultsEl.innerHTML = ''; return; }
+        resultsEl.innerHTML = '<div class="text-gray-400">Searching…</div>';
+        try{
+          const results = await (async ()=>{
+            // Try Photon first (Komoot)
+            try{
+              const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lang=en`;
+              const res = await fetch(url);
+              if(res.ok){
+                const data = await res.json();
+                const feats = data?.features || [];
+                if (feats.length) return feats.slice(0,8).map(f=>({
+                  id: `${f.geometry.coordinates[1]},${f.geometry.coordinates[0]}`,
+                  name: f.properties.name,
+                  admin1: f.properties.state,
+                  country: f.properties.country,
+                  country_code: (f.properties.countrycode||'').toUpperCase(),
+                  latitude: f.geometry.coordinates[1],
+                  longitude: f.geometry.coordinates[0]
+                }));
+              }
+            }catch(e){ /* swallow and fallback */ }
+            // Fallback: Open-Meteo
+            try{
+              const url2 = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`;
+              const res2 = await fetch(url2);
+              if(res2.ok){
+                const data2 = await res2.json();
+                if (data2.results && data2.results.length) return data2.results.map(r=>({
+                  id: `${r.latitude},${r.longitude}`,
+                  name: r.name, admin1: r.admin1, country: r.country, country_code: r.country_code,
+                  latitude: r.latitude, longitude: r.longitude
+                }));
+              }
+            }catch(e){ /* swallow and fallback */ }
+            // Last fallback: Nominatim
+            try{
+              const res3 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=8&addressdetails=1&q=${encodeURIComponent(q)}`);
+              if(!res3.ok) throw new Error('Fallback geocoding failed');
+              const data3 = await res3.json();
+              return (data3||[]).map(r=>({
+                id: `${r.lat},${r.lon}`,
+                name: (r.display_name||'').split(',')[0],
+                admin1: r.address?.state || r.address?.county,
+                country: r.address?.country,
+                country_code: (r.address?.country_code||'').toUpperCase(),
+                latitude: parseFloat(r.lat), longitude: parseFloat(r.lon)
+              }));
+            }catch(e){ throw e; }
+          })();
+
+          if(!results || results.length === 0){ resultsEl.innerHTML = '<div class="text-gray-400">No results.</div>'; return; }
+          resultsEl.innerHTML = '';
+          results.forEach(r => {
+            const btn = document.createElement('button');
+            btn.className = 'w-full text-left bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl px-4 py-3';
+            btn.innerHTML = `<div class='font-medium'>${r.name} ${r.country_code?countryFlagEmoji(r.country_code):''}</div><div class='text-sm text-gray-400'>${[r.admin1, r.country].filter(Boolean).join(', ')} · ${r.latitude.toFixed(2)}, ${r.longitude.toFixed(2)}</div>`;
+            btn.addEventListener('click', ()=> handleSelectLocation(r));
+            resultsEl.appendChild(btn);
+          });
+        }catch(e){
+          resultsEl.innerHTML = `<div class='text-red-400'>${e.message}</div>`;
+        }
+      }
+
+      async function handleSelectLocation(loc){
+        selectionWrap.classList.remove('hidden');
+        selectionMeta.textContent = `${loc.name}${loc.admin1?`, ${loc.admin1}`:''}${loc.country?`, ${loc.country}`:''} · ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`;
+        saveRecent(loc);
+        getWeatherFromSMHI(loc.latitude, loc.longitude, 'weather-search-smhi', loc.name);
+        showTab('search');
+      }
+
+      const debouncedSearch = debounce(searchLocations, 400);
+      searchInput?.addEventListener('input', (e)=> debouncedSearch(e.target.value));
+      clearBtn?.addEventListener('click', ()=>{ searchInput.value=''; resultsEl.innerHTML=''; searchInput.focus(); });
+      renderRecent();
+
+      // ---------- Boot: load default cities ----------
       getWeatherFromYR(57.4928, 12.0760, "weather-yr-kungsbacka", "Kungsbacka");
       getWeatherFromYR(57.7089, 11.9746, "weather-yr-gothenburg", "Gothenburg");
       getWeatherFromSMHI(57.48, 12.05, "weather-smhi-kungsbacka", "Kungsbacka");
